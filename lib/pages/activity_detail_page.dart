@@ -1,25 +1,59 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../models/activity.dart';
+import '../models/app_user.dart';
+import '../services/cart_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/activity_card.dart';
 import '../widgets/activity_image.dart';
 
-/// Détail d'une activité (US#3).
-class ActivityDetailPage extends StatelessWidget {
+/// Détail d'une activité, avec ajout au panier (US#3).
+class ActivityDetailPage extends StatefulWidget {
   const ActivityDetailPage({
     super.key,
     required this.activity,
-    this.onAddToCart,
+    required this.user,
   });
 
+  final Activity activity;
+  final AppUser user;
+
+  @override
+  State<ActivityDetailPage> createState() => _ActivityDetailPageState();
+}
+
+class _ActivityDetailPageState extends State<ActivityDetailPage> {
   static const _imageHeight = 400.0;
   static const _sheetOverlap = 40.0;
 
-  final Activity activity;
+  // Vrai si l'activité est déjà dans le panier (mis à jour en temps réel).
+  late final Stream<bool> _inCart = context
+      .read<CartService>()
+      .watchCart(widget.user.login)
+      .map((cart) => cart.any((a) => a.id == widget.activity.id));
 
-  /// Branché à l'US#3 ; tant qu'il est nul, le bouton est désactivé.
-  final VoidCallback? onAddToCart;
+  bool _adding = false;
+
+  Activity get activity => widget.activity;
+
+  Future<void> _addToCart() async {
+    setState(() => _adding = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await context.read<CartService>().addToCart(widget.user.login, activity);
+      messenger.showSnackBar(
+        SnackBar(content: Text('${activity.title} ajouté au panier')),
+      );
+    } catch (e) {
+      debugPrint("Erreur lors de l'ajout au panier : $e");
+      messenger.showSnackBar(
+        const SnackBar(content: Text("Impossible d'ajouter au panier")),
+      );
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -108,9 +142,14 @@ class ActivityDetailPage extends StatelessWidget {
           ),
         ],
       ),
-      bottomNavigationBar: _PriceBar(
-        price: activity.formattedPrice,
-        onAddToCart: onAddToCart,
+      bottomNavigationBar: StreamBuilder<bool>(
+        stream: _inCart,
+        builder: (context, snapshot) => _PriceBar(
+          price: activity.formattedPrice,
+          inCart: snapshot.data ?? false,
+          loading: _adding,
+          onAddToCart: _addToCart,
+        ),
       ),
     );
   }
@@ -154,10 +193,17 @@ class _InfoTile extends StatelessWidget {
 
 /// Barre fixe en bas : prix + bouton « Ajouter au panier ».
 class _PriceBar extends StatelessWidget {
-  const _PriceBar({required this.price, required this.onAddToCart});
+  const _PriceBar({
+    required this.price,
+    required this.inCart,
+    required this.loading,
+    required this.onAddToCart,
+  });
 
   final String price;
-  final VoidCallback? onAddToCart;
+  final bool inCart;
+  final bool loading;
+  final VoidCallback onAddToCart;
 
   @override
   Widget build(BuildContext context) {
@@ -202,7 +248,7 @@ class _PriceBar extends StatelessWidget {
               const SizedBox(width: 16),
               Expanded(
                 child: FilledButton(
-                  onPressed: onAddToCart,
+                  onPressed: inCart || loading ? null : onAddToCart,
                   style: FilledButton.styleFrom(
                     disabledBackgroundColor: AppColors.ink.withValues(
                       alpha: 0.85,
@@ -219,16 +265,23 @@ class _PriceBar extends StatelessWidget {
                           color: AppColors.accent,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
-                          Icons.add,
-                          size: 18,
-                          color: AppColors.ink,
-                        ),
+                        child: loading
+                            ? const Padding(
+                                padding: EdgeInsets.all(6),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Icon(
+                                inCart ? Icons.check : Icons.add,
+                                size: 18,
+                                color: AppColors.ink,
+                              ),
                       ),
                       const SizedBox(width: 10),
-                      const Flexible(
+                      Flexible(
                         child: Text(
-                          'Ajouter au panier',
+                          inCart ? 'Dans le panier' : 'Ajouter au panier',
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),

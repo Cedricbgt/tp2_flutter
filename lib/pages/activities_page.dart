@@ -31,7 +31,10 @@ class _ActivitiesPageState extends State<ActivitiesPage> {
 
   void _openDetail(Activity activity) {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => ActivityDetailPage(activity: activity)),
+      MaterialPageRoute(
+        builder: (_) =>
+            ActivityDetailPage(activity: activity, user: widget.user),
+      ),
     );
   }
 

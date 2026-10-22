@@ -6,6 +6,7 @@ import 'firebase_options.dart';
 import 'pages/login_page.dart';
 import 'services/activity_service.dart';
 import 'services/auth_service.dart';
+import 'services/cart_service.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -16,6 +17,7 @@ Future<void> main() async {
       providers: [
         Provider(create: (_) => AuthService()),
         Provider(create: (_) => ActivityService()),
+        Provider(create: (_) => CartService()),
       ],
       child: const MiagedApp(),
     ),
