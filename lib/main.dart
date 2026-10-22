@@ -1,15 +1,25 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
 import 'pages/login_page.dart';
+import 'services/activity_service.dart';
+import 'services/auth_service.dart';
+import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  runApp(
+    MultiProvider(
+      providers: [
+        Provider(create: (_) => AuthService()),
+        Provider(create: (_) => ActivityService()),
+      ],
+      child: const MiagedApp(),
+    ),
   );
-  runApp(const MiagedApp());
 }
 
 class MiagedApp extends StatelessWidget {
@@ -22,14 +32,7 @@ class MiagedApp extends StatelessWidget {
     return MaterialApp(
       title: title,
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.cyan),
-        appBarTheme: const AppBarTheme(
-          centerTitle: true,
-          backgroundColor: Colors.cyan,
-          foregroundColor: Colors.white,
-        ),
-      ),
+      theme: AppTheme.light(),
       home: const LoginPage(),
     );
   }
