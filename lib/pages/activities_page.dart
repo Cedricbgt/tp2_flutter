@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../widgets/activity_card.dart';
 import '../widgets/app_header.dart';
 import '../widgets/floating_nav_bar.dart';
+import '../widgets/user_avatar.dart';
 import 'activity_detail_page.dart';
 
 /// Liste de toutes les activités (US#2).
@@ -130,20 +131,6 @@ class _Header extends StatelessWidget {
 
   final AppUser user;
 
-  /// « cedric.bagot » → « CB », « user1 » → « US ».
-  String get _initials {
-    final parts = user.login
-        .split(RegExp(r'[._\s-]+'))
-        .where((p) => p.isNotEmpty);
-    if (parts.length >= 2) {
-      return parts.take(2).map((p) => p[0]).join().toUpperCase();
-    }
-    final login = user.login;
-    return login
-        .substring(0, login.length < 2 ? login.length : 2)
-        .toUpperCase();
-  }
-
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -152,21 +139,7 @@ class _Header extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const AppHeader(),
-          Semantics(
-            label: 'Connecté en tant que ${user.login}',
-            excludeSemantics: true,
-            child: CircleAvatar(
-              radius: 18,
-              backgroundColor: AppColors.ink,
-              child: Text(
-                _initials,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.accent,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ),
+          UserAvatar(user: user),
         ],
       ),
     );

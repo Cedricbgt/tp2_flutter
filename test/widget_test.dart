@@ -8,9 +8,11 @@ import 'package:miaged/pages/activity_detail_page.dart';
 import 'package:miaged/pages/cart_page.dart';
 import 'package:miaged/pages/home_page.dart';
 import 'package:miaged/pages/login_page.dart';
+import 'package:miaged/pages/profile_page.dart';
 import 'package:miaged/services/activity_service.dart';
 import 'package:miaged/services/auth_service.dart';
 import 'package:miaged/services/cart_service.dart';
+import 'package:miaged/services/user_service.dart';
 import 'package:miaged/widgets/activity_image.dart';
 import 'package:miaged/widgets/cart_item.dart';
 import 'package:miaged/widgets/floating_nav_bar.dart';
@@ -51,6 +53,29 @@ class FakeActivityService implements ActivityService {
   Stream<List<Activity>> watchActivities() => Stream.value(const [ski, yoga]);
 }
 
+/// Utilisateurs en mémoire.
+class FakeUserService implements UserService {
+  FakeUserService()
+    : users = {
+        'user1': const AppUser(
+          login: 'user1',
+          password: 'password1',
+          birthday: '12/12/1993',
+          address: 'Promenade des anglais',
+          postalCode: '06000',
+          city: 'Nice',
+        ),
+      };
+
+  final Map<String, AppUser> users;
+
+  @override
+  Future<AppUser?> getUser(String login) async => users[login];
+
+  @override
+  Future<void> updateUser(AppUser user) async => users[user.login] = user;
+}
+
 /// Panier en mémoire, par login.
 class FakeCartService implements CartService {
   final _carts = <String, List<Activity>>{};
@@ -85,6 +110,7 @@ Future<void> pumpApp(
   WidgetTester tester,
   Widget home, {
   FakeCartService? cartService,
+  FakeUserService? userService,
 }) async {
   tester.view.physicalSize = const Size(390, 844) * 3;
   tester.view.devicePixelRatio = 3;
@@ -95,6 +121,7 @@ Future<void> pumpApp(
         Provider<AuthService>(create: (_) => FakeAuthService()),
         Provider<ActivityService>(create: (_) => FakeActivityService()),
         Provider<CartService>(create: (_) => cartService ?? FakeCartService()),
+        Provider<UserService>(create: (_) => userService ?? FakeUserService()),
       ],
       child: MaterialApp(home: home),
     ),
@@ -321,6 +348,87 @@ void main() {
 
       expect(find.textContaining('Ton panier est vide'), findsOneWidget);
       expect(find.byKey(const Key('cart-total')), findsNothing);
+    });
+  });
+
+  group('US#5 Profil', () {
+    Future<FakeUserService> pumpProfile(WidgetTester tester) async {
+      final users = FakeUserService();
+      await pumpApp(
+        tester,
+        const Scaffold(body: ProfilePage(user: user1)),
+        userService: users,
+      );
+      await tester.pumpAndSettle();
+      return users;
+    }
+
+    TextField field(WidgetTester tester, String key) =>
+        tester.widget<TextField>(find.byKey(Key(key)));
+
+    testWidgets('Affiche les informations récupérées en base', (tester) async {
+      await pumpProfile(tester);
+
+      expect(field(tester, 'profile-login').controller!.text, 'user1');
+      expect(field(tester, 'profile-password').controller!.text, 'password1');
+      expect(field(tester, 'profile-birthday').controller!.text, '12/12/1993');
+      expect(
+        field(tester, 'profile-address').controller!.text,
+        'Promenade des anglais',
+      );
+      expect(field(tester, 'profile-postal-code').controller!.text, '06000');
+      expect(field(tester, 'profile-city').controller!.text, 'Nice');
+    });
+
+    testWidgets('Login en lecture seule, password masqué', (tester) async {
+      await pumpProfile(tester);
+
+      expect(field(tester, 'profile-login').readOnly, isTrue);
+      expect(field(tester, 'profile-password').obscureText, isTrue);
+    });
+
+    testWidgets('Code postal : clavier numérique, chiffres uniquement', (
+      tester,
+    ) async {
+      await pumpProfile(tester);
+
+      expect(
+        field(tester, 'profile-postal-code').keyboardType,
+        TextInputType.number,
+      );
+      await tester.enterText(
+        find.byKey(const Key('profile-postal-code')),
+        'a06b00x0',
+      );
+      expect(field(tester, 'profile-postal-code').controller!.text, '06000');
+    });
+
+    testWidgets('Valider enregistre les modifications en base', (tester) async {
+      final users = await pumpProfile(tester);
+
+      await tester.enterText(find.byKey(const Key('profile-city')), 'Lyon');
+      await tester.enterText(
+        find.byKey(const Key('profile-postal-code')),
+        '69002',
+      );
+      await tester.ensureVisible(find.text('Valider'));
+      await tester.tap(find.text('Valider'));
+      await tester.pumpAndSettle();
+
+      expect(users.users['user1']!.city, 'Lyon');
+      expect(users.users['user1']!.postalCode, '69002');
+      expect(users.users['user1']!.address, 'Promenade des anglais');
+      expect(find.text('Profil mis à jour'), findsOneWidget);
+    });
+
+    testWidgets('Se déconnecter revient à la page de login', (tester) async {
+      await pumpProfile(tester);
+
+      await tester.tap(find.text('Se déconnecter'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LoginPage), findsOneWidget);
+      expect(find.byType(ProfilePage), findsNothing);
     });
   });
 }

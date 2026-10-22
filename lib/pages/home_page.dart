@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../models/app_user.dart';
-import '../theme/app_theme.dart';
-import '../widgets/app_header.dart';
 import '../widgets/floating_nav_bar.dart';
 import 'activities_page.dart';
 import 'cart_page.dart';
+import 'profile_page.dart';
 
 /// Page principale après connexion : contenu + barre de navigation
 /// (Activités, Panier, Profil).
@@ -38,8 +37,7 @@ class _HomePageState extends State<HomePage> {
           children: [
             ActivitiesPage(user: widget.user),
             CartPage(user: widget.user),
-            // Profil (US#5) arrive à l'étape suivante.
-            const _ComingSoon(label: 'Profil'),
+            ProfilePage(user: widget.user),
           ],
         ),
       ),
@@ -48,34 +46,6 @@ class _HomePageState extends State<HomePage> {
         currentIndex: _selectedIndex,
         onTap: (index) => setState(() => _selectedIndex = index),
       ),
-    );
-  }
-}
-
-class _ComingSoon extends StatelessWidget {
-  const _ComingSoon({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: AppHeader(),
-        ),
-        Expanded(
-          child: Center(
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.headlineMedium
-                  ?.copyWith(color: AppColors.textSecondary),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
