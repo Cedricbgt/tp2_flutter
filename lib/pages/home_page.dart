@@ -5,6 +5,7 @@ import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
 import '../widgets/floating_nav_bar.dart';
 import 'activities_page.dart';
+import 'cart_page.dart';
 
 /// Page principale après connexion : contenu + barre de navigation
 /// (Activités, Panier, Profil).
@@ -36,8 +37,8 @@ class _HomePageState extends State<HomePage> {
           index: _selectedIndex,
           children: [
             ActivitiesPage(user: widget.user),
-            // Panier (US#4) et Profil (US#5) arrivent aux étapes suivantes.
-            const _ComingSoon(label: 'Panier'),
+            CartPage(user: widget.user),
+            // Profil (US#5) arrive à l'étape suivante.
             const _ComingSoon(label: 'Profil'),
           ],
         ),

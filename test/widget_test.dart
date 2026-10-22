@@ -5,12 +5,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:miaged/models/activity.dart';
 import 'package:miaged/models/app_user.dart';
 import 'package:miaged/pages/activity_detail_page.dart';
+import 'package:miaged/pages/cart_page.dart';
 import 'package:miaged/pages/home_page.dart';
 import 'package:miaged/pages/login_page.dart';
 import 'package:miaged/services/activity_service.dart';
 import 'package:miaged/services/auth_service.dart';
 import 'package:miaged/services/cart_service.dart';
 import 'package:miaged/widgets/activity_image.dart';
+import 'package:miaged/widgets/cart_item.dart';
 import 'package:miaged/widgets/floating_nav_bar.dart';
 import 'package:provider/provider.dart';
 
@@ -68,6 +70,12 @@ class FakeCartService implements CartService {
   Future<void> addToCart(String login, Activity activity) async {
     final cart = _carts.putIfAbsent(login, () => []);
     if (cart.every((a) => a.id != activity.id)) cart.insert(0, activity);
+    _changes.add(null);
+  }
+
+  @override
+  Future<void> removeFromCart(String login, String activityId) async {
+    _carts[login]?.removeWhere((a) => a.id == activityId);
     _changes.add(null);
   }
 }
@@ -244,6 +252,75 @@ void main() {
       final button = tester.widget<FilledButton>(find.byType(FilledButton));
       expect(button.onPressed, isNull);
       expect(find.text('Dans le panier'), findsOneWidget);
+    });
+  });
+
+  group('US#4 Panier', () {
+    Future<FakeCartService> pumpCart(WidgetTester tester) async {
+      final cart = FakeCartService();
+      await cart.addToCart('user1', ski);
+      await cart.addToCart('user1', yoga);
+      await pumpApp(
+        tester,
+        const Scaffold(body: CartPage(user: user1)),
+        cartService: cart,
+      );
+      await tester.pumpAndSettle();
+      return cart;
+    }
+
+    String total(WidgetTester tester) =>
+        tester.widget<Text>(find.byKey(const Key('cart-total'))).data!;
+
+    testWidgets('Affiche image, titre, lieu et prix de chaque activité', (
+      tester,
+    ) async {
+      await pumpCart(tester);
+
+      expect(find.byType(CartItem), findsNWidgets(2));
+      expect(find.byType(ActivityImage), findsNWidgets(2));
+      expect(find.text('Journée ski'), findsOneWidget);
+      expect(find.text('Isola 2000'), findsOneWidget);
+      expect(find.text('49 €'), findsOneWidget);
+      expect(find.text('12,50 €'), findsOneWidget);
+    });
+
+    testWidgets('Affiche le total général', (tester) async {
+      await pumpCart(tester);
+
+      expect(total(tester), '61,50 €');
+    });
+
+    testWidgets('La croix retire l’activité et met à jour le total', (
+      tester,
+    ) async {
+      final cart = await pumpCart(tester);
+
+      await tester.tap(find.byTooltip('Retirer Journée ski'));
+      await tester.pumpAndSettle();
+
+      expect(cart.cartOf('user1').map((a) => a.id), ['yoga']);
+      expect(find.text('Journée ski'), findsNothing);
+      expect(total(tester), '12,50 €');
+    });
+
+    testWidgets('Aucun autre bouton d’action (pas de paiement)', (
+      tester,
+    ) async {
+      await pumpCart(tester);
+
+      expect(find.byType(ElevatedButton), findsNothing);
+      expect(find.byType(FilledButton), findsNothing);
+      expect(find.byType(TextButton), findsNothing);
+      expect(find.byType(IconButton), findsNWidgets(2));
+    });
+
+    testWidgets('Panier vide : message, pas de total', (tester) async {
+      await pumpApp(tester, const Scaffold(body: CartPage(user: user1)));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Ton panier est vide'), findsOneWidget);
+      expect(find.byKey(const Key('cart-total')), findsNothing);
     });
   });
 }

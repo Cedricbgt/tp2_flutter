@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../utils/price_format.dart';
+
 /// Activité stockée dans la collection Firestore `activities`.
 class Activity {
   const Activity({
@@ -20,13 +22,7 @@ class Activity {
   final double price;
   final int maxPeople;
 
-  /// Prix affiché : « 25 € » ou « 12,50 € ».
-  String get formattedPrice {
-    final value = price == price.roundToDouble()
-        ? price.toStringAsFixed(0)
-        : price.toStringAsFixed(2).replaceAll('.', ',');
-    return '$value €';
-  }
+  String get formattedPrice => formatPrice(price);
 
   factory Activity.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? {};

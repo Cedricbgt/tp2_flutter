@@ -30,4 +30,8 @@ class CartService {
       'addedAt': FieldValue.serverTimestamp(),
     });
   }
+
+  Future<void> removeFromCart(String login, String activityId) {
+    return _cart(login).doc(activityId).delete();
+  }
 }
