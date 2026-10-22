@@ -9,6 +9,7 @@ import '../widgets/app_header.dart';
 import '../widgets/floating_nav_bar.dart';
 import '../widgets/labeled_field.dart';
 import '../widgets/user_avatar.dart';
+import 'add_activity_page.dart';
 import 'login_page.dart';
 
 /// Profil de l'utilisateur connecté : consultation et modification (US#5).
@@ -135,6 +136,15 @@ class _ProfilePageState extends State<ProfilePage> {
     return DateTime.tryParse('${match[3]}-${match[2]}-${match[1]}');
   }
 
+  Future<void> _openAddActivity() async {
+    final added = await Navigator.of(context)
+        .push<bool>(MaterialPageRoute(builder: (_) => const AddActivityPage()));
+    if (added == true && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Activité ajoutée')));
+    }
+  }
+
   void _logout() {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),
@@ -204,6 +214,8 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+            _AddActivityCard(onTap: _openAddActivity),
             const SizedBox(height: 12),
             if (_loading)
               const Padding(
@@ -338,6 +350,65 @@ class _LoadError extends StatelessWidget {
           const SizedBox(height: 12),
           OutlinedButton(onPressed: onRetry, child: const Text('Réessayer')),
         ],
+      ),
+    );
+  }
+}
+
+/// Carte noire menant au formulaire d'ajout d'activité (US#6).
+class _AddActivityCard extends StatelessWidget {
+  const _AddActivityCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
+    return Material(
+      color: AppColors.ink,
+      borderRadius: BorderRadius.circular(22),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.accent,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.add, color: AppColors.ink),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Ajouter une activité',
+                      style: textTheme.titleSmall?.copyWith(
+                        color: AppColors.surface,
+                      ),
+                    ),
+                    Text(
+                      "Catégorie détectée par l'IA",
+                      style: textTheme.labelMedium?.copyWith(
+                        color: AppColors.textOnDark,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.textOnDark),
+            ],
+          ),
+        ),
       ),
     );
   }

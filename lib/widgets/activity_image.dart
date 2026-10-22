@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// Image réseau d'une activité, avec un fond neutre pendant le chargement
-/// et une icône si l'image est introuvable.
+/// Image d'une activité (URL réseau ou data URL), avec un fond neutre
+/// pendant le chargement et une icône si l'image est introuvable.
 class ActivityImage extends StatelessWidget {
   const ActivityImage({super.key, required this.url, this.width, this.height});
 
@@ -30,6 +30,27 @@ class ActivityImage extends StatelessWidget {
       );
     }
 
+    Widget broken(BuildContext context, Object error, StackTrace? stack) =>
+        placeholder(
+          child: const Icon(
+            Icons.broken_image_outlined,
+            color: AppColors.textSecondary,
+          ),
+        );
+
+    // Photo ajoutée depuis l'appli : stockée en data URL dans Firestore.
+    if (url.startsWith('data:')) {
+      final data = UriData.parse(url);
+      return Image.memory(
+        data.contentAsBytes(),
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        errorBuilder: broken,
+      );
+    }
+
     return Image.network(
       url,
       width: width,
@@ -37,12 +58,7 @@ class ActivityImage extends StatelessWidget {
       fit: BoxFit.cover,
       loadingBuilder: (context, child, progress) =>
           progress == null ? child : placeholder(),
-      errorBuilder: (context, error, stackTrace) => placeholder(
-        child: const Icon(
-          Icons.broken_image_outlined,
-          color: AppColors.textSecondary,
-        ),
-      ),
+      errorBuilder: broken,
     );
   }
 }

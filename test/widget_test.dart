@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:miaged/models/activity.dart';
 import 'package:miaged/models/app_user.dart';
 import 'package:miaged/pages/activity_detail_page.dart';
+import 'package:miaged/pages/add_activity_page.dart';
 import 'package:miaged/pages/cart_page.dart';
 import 'package:miaged/pages/home_page.dart';
 import 'package:miaged/pages/login_page.dart';
@@ -12,6 +15,7 @@ import 'package:miaged/pages/profile_page.dart';
 import 'package:miaged/services/activity_service.dart';
 import 'package:miaged/services/auth_service.dart';
 import 'package:miaged/services/cart_service.dart';
+import 'package:miaged/services/category_classifier.dart';
 import 'package:miaged/services/user_service.dart';
 import 'package:miaged/widgets/activity_image.dart';
 import 'package:miaged/widgets/cart_item.dart';
@@ -49,9 +53,41 @@ const yoga = Activity(
 const user1 = AppUser(login: 'user1', password: 'password1');
 
 class FakeActivityService implements ActivityService {
+  final added = <Activity>[];
+
   @override
   Stream<List<Activity>> watchActivities() => Stream.value(const [ski, yoga]);
+
+  @override
+  Future<void> addActivity(Activity activity) async => added.add(activity);
 }
+
+/// IA simulée : renvoie [category], échoue si elle vaut `null`,
+/// ou simule un quota atteint si [busy].
+class FakeClassifier implements CategoryClassifier {
+  FakeClassifier([this.category = 'Sport', this.busy = false]);
+
+  final String? category;
+  final bool busy;
+  int calls = 0;
+
+  @override
+  Future<String> classify(Uint8List imageBytes, String mimeType) async {
+    calls++;
+    if (busy) throw const ClassifierBusyException();
+    final category = this.category;
+    if (category == null) throw Exception('IA indisponible');
+    return category;
+  }
+}
+
+/// Image PNG de 1 x 1 pixel.
+final testImage = PickedImage(
+  base64Decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  ),
+  'image/png',
+);
 
 /// Utilisateurs en mémoire.
 class FakeUserService implements UserService {
@@ -111,6 +147,8 @@ Future<void> pumpApp(
   Widget home, {
   FakeCartService? cartService,
   FakeUserService? userService,
+  FakeActivityService? activityService,
+  CategoryClassifier? classifier,
 }) async {
   tester.view.physicalSize = const Size(390, 844) * 3;
   tester.view.devicePixelRatio = 3;
@@ -119,9 +157,14 @@ Future<void> pumpApp(
     MultiProvider(
       providers: [
         Provider<AuthService>(create: (_) => FakeAuthService()),
-        Provider<ActivityService>(create: (_) => FakeActivityService()),
+        Provider<ActivityService>(
+          create: (_) => activityService ?? FakeActivityService(),
+        ),
         Provider<CartService>(create: (_) => cartService ?? FakeCartService()),
         Provider<UserService>(create: (_) => userService ?? FakeUserService()),
+        Provider<CategoryClassifier>(
+          create: (_) => classifier ?? FakeClassifier(),
+        ),
       ],
       child: MaterialApp(home: home),
     ),
@@ -429,6 +472,145 @@ void main() {
 
       expect(find.byType(LoginPage), findsOneWidget);
       expect(find.byType(ProfilePage), findsNothing);
+    });
+  });
+
+  group('US#6 Ajout d’activité avec IA', () {
+    Future<FakeActivityService> pumpAdd(
+      WidgetTester tester, {
+      CategoryClassifier? classifier,
+      PickedImage? image,
+    }) async {
+      final activities = FakeActivityService();
+      await pumpApp(
+        tester,
+        AddActivityPage(pickImage: () async => image ?? testImage),
+        activityService: activities,
+        classifier: classifier,
+      );
+      await tester.pumpAndSettle();
+      return activities;
+    }
+
+    String detectedCategory(WidgetTester tester) =>
+        tester.widget<Text>(find.byKey(const Key('detected-category'))).data!;
+
+    Future<void> fillForm(WidgetTester tester) async {
+      await tester.enterText(find.byKey(const Key('add-title')), 'Kayak');
+      await tester.enterText(find.byKey(const Key('add-location')), 'Antibes');
+      await tester.enterText(find.byKey(const Key('add-max-people')), '8');
+      await tester.enterText(find.byKey(const Key('add-price')), '40');
+    }
+
+    Future<void> tapValider(WidgetTester tester) async {
+      await tester.ensureVisible(find.text('Valider'));
+      await tester.tap(find.text('Valider'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('Le profil propose d’ajouter une activité', (tester) async {
+      await pumpApp(tester, const Scaffold(body: ProfilePage(user: user1)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Ajouter une activité'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AddActivityPage), findsOneWidget);
+    });
+
+    testWidgets('La catégorie est détectée par l’IA à partir de l’image', (
+      tester,
+    ) async {
+      final classifier = FakeClassifier('Nature');
+      await pumpAdd(tester, classifier: classifier);
+      expect(detectedCategory(tester), 'Ajoute une photo');
+
+      await tester.tap(find.text('Ajouter une photo'));
+      await tester.pumpAndSettle();
+
+      expect(classifier.calls, 1);
+      expect(detectedCategory(tester), 'Nature');
+    });
+
+    testWidgets('La catégorie n’est pas éditable', (tester) async {
+      await pumpAdd(tester);
+
+      // Seuls titre, lieu, personnes max et prix sont des champs de saisie.
+      expect(find.byType(TextField), findsNWidgets(4));
+    });
+
+    testWidgets('Prix et personnes max : clavier numérique, chiffres seuls', (
+      tester,
+    ) async {
+      await pumpAdd(tester);
+
+      for (final key in ['add-price', 'add-max-people']) {
+        final field = find.byKey(Key(key));
+        expect(
+          tester.widget<TextField>(field).keyboardType,
+          TextInputType.number,
+        );
+        await tester.enterText(field, '2a5,€');
+        expect(tester.widget<TextField>(field).controller!.text, '25');
+      }
+    });
+
+    testWidgets('Valider enregistre l’activité en base', (tester) async {
+      final activities = await pumpAdd(tester);
+
+      await tester.tap(find.text('Ajouter une photo'));
+      await tester.pumpAndSettle();
+      await fillForm(tester);
+      await tapValider(tester);
+
+      expect(activities.added, hasLength(1));
+      final added = activities.added.single;
+      expect(added.title, 'Kayak');
+      expect(added.category, 'Sport');
+      expect(added.location, 'Antibes');
+      expect(added.maxPeople, 8);
+      expect(added.price, 40);
+      expect(added.imageUrl, startsWith('data:image/png;base64,'));
+      expect(find.byType(AddActivityPage), findsNothing);
+    });
+
+    testWidgets('Sans image : rien n’est enregistré', (tester) async {
+      final activities = await pumpAdd(tester);
+
+      await fillForm(tester);
+      await tapValider(tester);
+
+      expect(activities.added, isEmpty);
+      expect(find.text('Ajoute une photo'), findsWidgets);
+    });
+
+    testWidgets(
+      'IA en échec : message, relance possible, pas d’enregistrement',
+      (tester) async {
+        final activities = await pumpAdd(
+          tester,
+          classifier: FakeClassifier(null),
+        );
+
+        await tester.tap(find.text('Ajouter une photo'));
+        await tester.pumpAndSettle();
+        expect(detectedCategory(tester), "Échec de l'analyse");
+        expect(find.byTooltip("Relancer l'analyse"), findsOneWidget);
+
+        await fillForm(tester);
+        await tapValider(tester);
+        expect(activities.added, isEmpty);
+      },
+    );
+
+    testWidgets('Quota IA atteint : message dédié', (tester) async {
+      await pumpAdd(tester, classifier: FakeClassifier('Sport', true));
+
+      await tester.tap(find.text('Ajouter une photo'));
+      await tester.pumpAndSettle();
+
+      expect(detectedCategory(tester), contains('réessaie dans une minute'));
+      expect(find.byTooltip("Relancer l'analyse"), findsOneWidget);
     });
   });
 }

@@ -7,6 +7,7 @@ import 'pages/login_page.dart';
 import 'services/activity_service.dart';
 import 'services/auth_service.dart';
 import 'services/cart_service.dart';
+import 'services/category_classifier.dart';
 import 'services/user_service.dart';
 import 'theme/app_theme.dart';
 
@@ -20,6 +21,7 @@ Future<void> main() async {
         Provider(create: (_) => ActivityService()),
         Provider(create: (_) => CartService()),
         Provider(create: (_) => UserService()),
+        Provider<CategoryClassifier>(create: (_) => GeminiCategoryClassifier()),
       ],
       child: const MiagedApp(),
     ),

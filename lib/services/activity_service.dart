@@ -9,6 +9,11 @@ class ActivityService {
 
   final FirebaseFirestore _firestore;
 
+  /// Ajoute une activité ; Firestore génère son identifiant.
+  Future<void> addActivity(Activity activity) {
+    return _firestore.collection('activities').add(activity.toFirestore());
+  }
+
   /// Liste des activités triées par titre, mise à jour en temps réel.
   Stream<List<Activity>> watchActivities() {
     return _firestore
